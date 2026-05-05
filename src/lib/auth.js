@@ -9,8 +9,11 @@ const useFirestoreAuthState = async (sessionId) => {
         try {
             const doc = await keysCollection.doc(`${type}-${id}`).get();
             if (doc.exists) {
-                const data = JSON.stringify(doc.data());
-                return JSON.parse(data, BufferJSON.reviver);
+                const data = doc.data();
+                // If we wrapped it in { data: ... }, extract it
+                const value = data.hasOwnProperty('data') ? data.data : data;
+                const serialized = JSON.stringify(value);
+                return JSON.parse(serialized, BufferJSON.reviver);
             }
         } catch (error) {
             console.error('Error reading data from Firestore:', error);
@@ -20,8 +23,10 @@ const useFirestoreAuthState = async (sessionId) => {
 
     const writeData = async (data, type, id) => {
         try {
-            const value = JSON.parse(JSON.stringify(data, BufferJSON.replacer));
-            await keysCollection.doc(`${type}-${id}`).set(value);
+            const serialized = JSON.parse(JSON.stringify(data, BufferJSON.replacer));
+            // Always wrap in an object to ensure Firestore compatibility
+            // Firestore documents must be plain objects, not arrays or primitives.
+            await keysCollection.doc(`${type}-${id}`).set({ data: serialized });
         } catch (error) {
             console.error('Error writing data to Firestore:', error);
         }

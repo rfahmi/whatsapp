@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const { getFirestore } = require('firebase-admin/firestore');
 
 if (!admin.apps.length) {
     admin.initializeApp({
@@ -6,6 +7,7 @@ if (!admin.apps.length) {
     });
 }
 
-const db = admin.firestore();
+// Specify the database ID 'whatsapp-bot'
+const db = getFirestore('whatsapp-bot');
 
 module.exports = { db };
