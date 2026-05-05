@@ -128,17 +128,18 @@ app.post('/reset-session', authMiddleware, async (req, res) => {
 });
 
 const start = async () => {
-    try {
-        await connectToWhatsApp();
-        startQueueWorker();
-        startHousekeeping();
-        app.listen(PORT, () => {
-            logger.info(`Service running on port ${PORT}`);
-        });
-    } catch (error) {
-        logger.error({ err: error.message }, 'Failed to start service');
-        process.exit(1);
-    }
+    app.listen(PORT, async () => {
+        logger.info(`Service running on port ${PORT}`);
+        try {
+            await connectToWhatsApp();
+            startQueueWorker();
+            startHousekeeping();
+            logger.info('Background services initialized');
+        } catch (error) {
+            logger.error({ err: error.message }, 'Failed to initialize background services');
+            // We don't exit here because the web server is already running and serving health checks
+        }
+    });
 };
 
 start();
