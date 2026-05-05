@@ -3,8 +3,10 @@ const { useFirestoreAuthState } = require('./auth');
 const qrcode = require('qrcode-terminal');
 const logger = require('./logger');
 
+const { db } = require('./firestore');
 let sock = null;
 let isConnected = false;
+let lastQr = null;
 
 const connectToWhatsApp = async () => {
     // Use a different session ID for local development to avoid conflicts with production
@@ -32,10 +34,22 @@ const connectToWhatsApp = async () => {
         generateHighQualityLinkPreview: true,
     });
 
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
+            lastQr = qr;
             logger.info('>> New QR Code received. Please scan:');
+            
+            // Store QR in Firestore for remote retrieval
+            try {
+                await db.collection('whatsapp_sessions').doc(sessionId).set({ 
+                    lastQr: qr,
+                    qrUpdatedAt: new Date()
+                }, { merge: true });
+            } catch (err) {
+                logger.error({ err: err.message }, 'Failed to store QR in Firestore');
+            }
+
             qrcode.generate(qr, { small: true }, (code) => {
                 // Log directly to console to avoid JSON escaping in Cloud Run logs
                 console.log('\n' + code + '\n');
@@ -58,6 +72,11 @@ const connectToWhatsApp = async () => {
             }
         } else if (connection === 'open') {
             isConnected = true;
+            lastQr = null;
+            // Clear QR from Firestore when connected
+            await db.collection('whatsapp_sessions').doc(sessionId).set({ 
+                lastQr: null 
+            }, { merge: true });
             logger.info('WhatsApp connection opened');
         }
     });
@@ -73,6 +92,8 @@ const getSocket = async () => {
     }
     return sock;
 };
+
+const getQr = () => lastQr;
 
 const sendMessage = async (jid, content) => {
     if (!isConnected) {
@@ -114,4 +135,4 @@ const sendMessage = async (jid, content) => {
     return await socket.sendMessage(jid, content);
 };
 
-module.exports = { connectToWhatsApp, getSocket, sendMessage };
+module.exports = { connectToWhatsApp, getSocket, sendMessage, getQr };

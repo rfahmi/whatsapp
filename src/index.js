@@ -51,6 +51,53 @@ app.post('/send-message', authMiddleware, async (req, res) => {
     }
 });
 
+app.get('/qr', authMiddleware, async (req, res) => {
+    const { getQr } = require('./lib/whatsapp');
+    const sessionId = process.env.NODE_ENV === 'production' ? 'main-session' : 'local-test-session';
+    
+    try {
+        // Try memory first, then Firestore
+        let qr = getQr();
+        if (!qr) {
+            const doc = await db.collection('whatsapp_sessions').doc(sessionId).get();
+            qr = doc.data()?.lastQr;
+        }
+
+        if (!qr) {
+            return res.status(404).send('No active QR code found. Is it already connected?');
+        }
+
+        if (req.query.format === 'json') {
+            return res.json({ qr });
+        }
+
+        // Simple HTML to render QR
+        res.send(`
+            <html>
+                <head><title>WhatsApp QR</title></head>
+                <body style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; background:#f0f2f5;">
+                    <div style="background:white; padding:40px; border-radius:20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align:center;">
+                        <h1 style="color:#128c7e;">Scan WhatsApp QR</h1>
+                        <div id="qrcode" style="margin:20px 0;"></div>
+                        <p style="color:#666;">Refresh this page if the QR expires.</p>
+                    </div>
+                    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+                    <script>
+                        new QRCode(document.getElementById("qrcode"), {
+                            text: "${qr}",
+                            width: 256,
+                            height: 256
+                        });
+                    </script>
+                </body>
+            </html>
+        `);
+    } catch (error) {
+        logger.error({ err: error.message }, 'Failed to fetch QR');
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
