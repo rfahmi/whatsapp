@@ -20,6 +20,7 @@ const { connectToWhatsApp } = require('./lib/whatsapp');
 const { addMessageToQueue, startQueueWorker } = require('./lib/queue');
 const { authMiddleware } = require('./middleware/auth');
 const logger = require('./lib/logger');
+const { startHousekeeping } = require('./lib/housekeeping');
 
 const app = express();
 app.use(express.json());
@@ -53,6 +54,7 @@ const start = async () => {
     try {
         await connectToWhatsApp();
         startQueueWorker();
+        startHousekeeping();
         app.listen(PORT, () => {
             logger.info(`Service running on port ${PORT}`);
         });
