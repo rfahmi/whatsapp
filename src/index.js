@@ -16,17 +16,21 @@ console.log = (...args) => {
 };
 
 const express = require('express');
-const { connectToWhatsApp } = require('./lib/whatsapp');
-const { addMessageToQueue, startQueueWorker } = require('./lib/queue');
 const { authMiddleware } = require('./middleware/auth');
 const logger = require('./lib/logger');
-const { startHousekeeping } = require('./lib/housekeeping');
-const { db } = require('./lib/firestore');
 
 const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 8080;
+
+// Lazy-loaded services
+let db;
+let addMessageToQueue;
+let startQueueWorker;
+let connectToWhatsApp;
+let startHousekeeping;
+let getQr;
 
 app.post('/send-message', authMiddleware, async (req, res) => {
     const { to, message, buttons, footer } = req.body;
