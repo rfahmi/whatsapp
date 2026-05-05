@@ -2,7 +2,7 @@ require('dotenv').config();
 
 // Ultimate silence: Intercept system-level output to filter out noisy library blobs
 const originalWrite = process.stdout.write;
-process.stdout.write = function(chunk, encoding, callback) {
+process.stdout.write = function (chunk, encoding, callback) {
     const str = chunk.toString();
     if (str.includes('Closing session')) return true;
     return originalWrite.apply(process.stdout, arguments);
@@ -46,15 +46,7 @@ app.post('/send-message', authMiddleware, async (req, res) => {
     const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
 
     try {
-        const payload = (buttons && Array.isArray(buttons)) 
-            ? { 
-                message, 
-                buttons, 
-                footer: footer || '', 
-                header: header || '' 
-              } 
-            : message;
-
+        const payload = message;
         const messageId = await addMessageToQueue(jid, payload);
         res.status(202).json({ status: 'queued', messageId });
     } catch (error) {
@@ -71,7 +63,7 @@ app.get('/qr', authMiddleware, async (req, res) => {
         ({ db } = require('./lib/firestore'));
     }
     const sessionId = process.env.NODE_ENV === 'production' ? 'main-session' : 'local-test-session';
-    
+
     try {
         // Try memory first, then Firestore
         let qr = getQr();
@@ -130,7 +122,7 @@ app.post('/reset-session', authMiddleware, async (req, res) => {
     try {
         // 1. Delete session from Firestore
         await db.collection('whatsapp_sessions').doc(sessionId).delete();
-        
+
         // 2. Also delete all keys in the subcollection
         const keysSnapshot = await db.collection('whatsapp_sessions').doc(sessionId).collection('keys').get();
         const batch = db.batch();
