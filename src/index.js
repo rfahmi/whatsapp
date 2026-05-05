@@ -33,6 +33,9 @@ let startHousekeeping;
 let getQr;
 
 app.post('/send-message', authMiddleware, async (req, res) => {
+    if (!addMessageToQueue) {
+        ({ addMessageToQueue } = require('./lib/queue'));
+    }
     const { to, message, buttons, footer } = req.body;
 
     if (!to || !message) {
@@ -56,7 +59,12 @@ app.post('/send-message', authMiddleware, async (req, res) => {
 });
 
 app.get('/qr', authMiddleware, async (req, res) => {
-    const { getQr } = require('./lib/whatsapp');
+    if (!getQr) {
+        ({ getQr } = require('./lib/whatsapp'));
+    }
+    if (!db) {
+        ({ db } = require('./lib/firestore'));
+    }
     const sessionId = process.env.NODE_ENV === 'production' ? 'main-session' : 'local-test-session';
     
     try {
@@ -108,6 +116,9 @@ app.get('/health', (req, res) => {
 
 // Securely reset the session remotely (useful for Cloud Run)
 app.post('/reset-session', authMiddleware, async (req, res) => {
+    if (!db) {
+        ({ db } = require('./lib/firestore'));
+    }
     const sessionId = process.env.NODE_ENV === 'production' ? 'main-session' : 'local-test-session';
     logger.warn({ sessionId }, 'Manual session reset triggered via API');
 
@@ -135,13 +146,18 @@ const start = async () => {
     app.listen(PORT, async () => {
         logger.info(`Service running on port ${PORT}`);
         try {
+            // Load background services lazily
+            ({ connectToWhatsApp, getQr } = require('./lib/whatsapp'));
+            ({ startQueueWorker } = require('./lib/queue'));
+            ({ startHousekeeping } = require('./lib/housekeeping'));
+            ({ db } = require('./lib/firestore'));
+
             await connectToWhatsApp();
             startQueueWorker();
             startHousekeeping();
             logger.info('Background services initialized');
         } catch (error) {
             logger.error({ err: error.message }, 'Failed to initialize background services');
-            // We don't exit here because the web server is already running and serving health checks
         }
     });
 };
