@@ -36,7 +36,7 @@ app.post('/send-message', authMiddleware, async (req, res) => {
     if (!addMessageToQueue) {
         ({ addMessageToQueue } = require('./lib/queue'));
     }
-    const { to, message, buttons, footer } = req.body;
+    const { to, message, buttons, footer, header } = req.body;
 
     if (!to || !message) {
         return res.status(400).json({ error: 'Missing "to" or "message" fields' });
@@ -47,7 +47,12 @@ app.post('/send-message', authMiddleware, async (req, res) => {
 
     try {
         const payload = (buttons && Array.isArray(buttons)) 
-            ? { message, buttons, footer } 
+            ? { 
+                message, 
+                buttons, 
+                footer: footer || '', 
+                header: header || '' 
+              } 
             : message;
 
         const messageId = await addMessageToQueue(jid, payload);

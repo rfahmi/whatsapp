@@ -1,4 +1,4 @@
-const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
 const { useFirestoreAuthState } = require('./auth');
 const qrcode = require('qrcode-terminal');
 const logger = require('./logger');
@@ -108,31 +108,44 @@ const sendMessage = async (jid, content) => {
     }
 
     // If it contains buttons, format as interactive message (Native Flow)
+    // We must bypass socket.sendMessage() because Baileys v7 does not handle
+    // interactiveMessage in generateWAMessageContent and falls through to
+    // prepareWAMessageMedia, which throws "Invalid media type".
+    // Instead, we build the proto manually and relay it directly.
     if (content.buttons && Array.isArray(content.buttons)) {
-        return await socket.sendMessage(jid, {
-            viewOnceMessage: {
-                message: {
-                    messageContextInfo: {
-                        deviceListMetadata: {},
-                        deviceListMetadataVersion: 2
-                    },
-                    interactiveMessage: {
-                        body: { text: content.text || content.message },
-                        footer: { text: content.footer || '' },
-                        header: { title: '', hasMediaAttachment: false },
-                        nativeFlowMessage: {
-                            buttons: content.buttons.map(btn => ({
-                                name: 'quick_reply',
-                                buttonParamsJson: JSON.stringify({
-                                    display_text: btn.text,
-                                    id: btn.id
-                                })
-                            }))
-                        }
-                    }
-                }
-            }
+        const interactiveMsg = proto.Message.InteractiveMessage.create({
+            body: proto.Message.InteractiveMessage.Body.create({
+                text: content.text || content.message || ' '
+            }),
+            footer: proto.Message.InteractiveMessage.Footer.create({
+                text: content.footer || ''
+            }),
+            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                buttons: content.buttons.map(btn => ({
+                    name: 'quick_reply',
+                    buttonParamsJson: JSON.stringify({
+                        display_text: btn.text || (btn.buttonText && btn.buttonText.displayText) || '',
+                        id: btn.id || btn.buttonId || ''
+                    })
+                }))
+            })
         });
+
+        if (content.header) {
+            interactiveMsg.header = proto.Message.InteractiveMessage.Header.create({
+                title: content.header,
+                hasMediaAttachment: false
+            });
+        }
+
+        const protoMessage = proto.Message.create({ interactiveMessage: interactiveMsg });
+        const fullMsg = generateWAMessageFromContent(jid, protoMessage, {
+            userJid: socket.user.id,
+            timestamp: new Date()
+        });
+
+        await socket.relayMessage(jid, fullMsg.message, { messageId: fullMsg.key.id });
+        return fullMsg;
     }
 
     // Otherwise send as is (allows for other Baileys message types)
