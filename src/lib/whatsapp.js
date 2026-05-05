@@ -35,8 +35,11 @@ const connectToWhatsApp = async () => {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
-            logger.info('Scan the QR code below:');
-            qrcode.generate(qr, { small: true });
+            logger.info('>> New QR Code received. Please scan:');
+            qrcode.generate(qr, { small: true }, (code) => {
+                // Log directly to console to avoid JSON escaping in Cloud Run logs
+                console.log('\n' + code + '\n');
+            });
         }
 
         if (connection === 'close') {
@@ -71,13 +74,44 @@ const getSocket = async () => {
     return sock;
 };
 
-const sendMessage = async (jid, text) => {
+const sendMessage = async (jid, content) => {
     if (!isConnected) {
         throw new Error('WhatsApp connection is not open. Message will be retried.');
     }
     const socket = await getSocket();
     logger.info({ to: jid }, 'Sending message');
-    return await socket.sendMessage(jid, { text });
+
+    // If it's a simple string, send it as text
+    if (typeof content === 'string') {
+        return await socket.sendMessage(jid, { text: content });
+    }
+
+    // If it contains buttons, format as interactive message (Native Flow)
+    if (content.buttons && Array.isArray(content.buttons)) {
+        const message = {
+            viewOnceMessage: {
+                message: {
+                    interactiveMessage: {
+                        body: { text: content.text || content.message },
+                        footer: { text: content.footer || '' },
+                        nativeFlowMessage: {
+                            buttons: content.buttons.map(btn => ({
+                                name: 'quick_reply',
+                                buttonParamsJson: JSON.stringify({
+                                    display_text: btn.text,
+                                    id: btn.id
+                                })
+                            }))
+                        }
+                    }
+                }
+            }
+        };
+        return await socket.sendMessage(jid, message);
+    }
+
+    // Otherwise send as is (allows for other Baileys message types)
+    return await socket.sendMessage(jid, content);
 };
 
 module.exports = { connectToWhatsApp, getSocket, sendMessage };

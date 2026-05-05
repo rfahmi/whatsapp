@@ -29,7 +29,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 8080;
 
 app.post('/send-message', authMiddleware, async (req, res) => {
-    const { to, message } = req.body;
+    const { to, message, buttons, footer } = req.body;
 
     if (!to || !message) {
         return res.status(400).json({ error: 'Missing "to" or "message" fields' });
@@ -39,7 +39,11 @@ app.post('/send-message', authMiddleware, async (req, res) => {
     const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
 
     try {
-        const messageId = await addMessageToQueue(jid, message);
+        const payload = (buttons && Array.isArray(buttons)) 
+            ? { message, buttons, footer } 
+            : message;
+
+        const messageId = await addMessageToQueue(jid, payload);
         res.status(202).json({ status: 'queued', messageId });
     } catch (error) {
         logger.error({ err: error.message }, 'Error queuing message');
