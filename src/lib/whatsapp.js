@@ -109,12 +109,17 @@ const sendMessage = async (jid, content) => {
 
     // If it contains buttons, format as interactive message (Native Flow)
     if (content.buttons && Array.isArray(content.buttons)) {
-        const message = {
+        return await socket.sendMessage(jid, {
             viewOnceMessage: {
                 message: {
+                    messageContextInfo: {
+                        deviceListMetadata: {},
+                        deviceListMetadataVersion: 2
+                    },
                     interactiveMessage: {
                         body: { text: content.text || content.message },
                         footer: { text: content.footer || '' },
+                        header: { title: '', hasMediaAttachment: false },
                         nativeFlowMessage: {
                             buttons: content.buttons.map(btn => ({
                                 name: 'quick_reply',
@@ -127,8 +132,7 @@ const sendMessage = async (jid, content) => {
                     }
                 }
             }
-        };
-        return await socket.sendMessage(jid, message);
+        });
     }
 
     // Otherwise send as is (allows for other Baileys message types)
