@@ -41,7 +41,8 @@ const useFirestoreAuthState = async (sessionId) => {
     };
 
     const credsDoc = await sessionDoc.get();
-    let creds = credsDoc.exists ? JSON.parse(JSON.stringify(credsDoc.data().creds), BufferJSON.reviver) : initAuthCreds();
+    const data = credsDoc.data();
+    let creds = (credsDoc.exists && data && data.creds) ? JSON.parse(JSON.stringify(data.creds), BufferJSON.reviver) : initAuthCreds();
 
     return {
         state: {
