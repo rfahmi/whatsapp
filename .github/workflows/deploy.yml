@@ -46,4 +46,4 @@ jobs:
           env_vars: |
             API_KEY=${{ secrets.API_KEY }}
             NODE_ENV=production
-          flags: --allow-unauthenticated --max-instances=1
+          flags: --allow-unauthenticated --min-instances=1 --max-instances=1 --memory=512Mi --cpu=1
