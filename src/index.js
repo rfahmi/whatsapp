@@ -31,6 +31,7 @@ let startQueueWorker;
 let connectToWhatsApp;
 let startHousekeeping;
 let getQr;
+let instanceId;
 
 app.post('/send-message', authMiddleware, async (req, res) => {
     if (!addMessageToQueue) {
@@ -57,7 +58,7 @@ app.post('/send-message', authMiddleware, async (req, res) => {
 
 app.get('/qr', authMiddleware, async (req, res) => {
     if (!getQr) {
-        ({ getQr } = require('./lib/whatsapp'));
+        ({ getQr, instanceId } = require('./lib/whatsapp'));
     }
     if (!db) {
         ({ db } = require('./lib/firestore'));
@@ -65,11 +66,15 @@ app.get('/qr', authMiddleware, async (req, res) => {
     const sessionId = process.env.NODE_ENV === 'production' ? 'main-session' : 'local-test-session';
 
     try {
+        const doc = await db.collection('whatsapp_sessions').doc(sessionId).get();
+        const data = doc.data();
+        
         // Try memory first, then Firestore
+        let source = 'Live (Active Process)';
         let qr = getQr();
         if (!qr) {
-            const doc = await db.collection('whatsapp_sessions').doc(sessionId).get();
-            qr = doc.data()?.lastQr;
+            qr = data?.lastQr;
+            source = 'Firestore (Pending/Other instance)';
         }
 
         if (!qr) {
@@ -77,18 +82,26 @@ app.get('/qr', authMiddleware, async (req, res) => {
         }
 
         if (req.query.format === 'json') {
-            return res.json({ qr });
+            return res.json({ qr, source });
         }
 
-        // Simple HTML to render QR
+        // Simple HTML to render QR with auto-refresh
+        const updatedAt = data?.qrUpdatedAt?.toDate().toLocaleTimeString() || 'Just now';
         res.send(`
             <html>
-                <head><title>WhatsApp QR</title></head>
-                <body style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; background:#f0f2f5;">
+                <head>
+                    <title>WhatsApp QR</title>
+                    <meta http-equiv="refresh" content="30">
+                </head>
+                <body style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; background:#f0f2f5; margin:0;">
                     <div style="background:white; padding:40px; border-radius:20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align:center;">
-                        <h1 style="color:#128c7e;">Scan WhatsApp QR</h1>
-                        <div id="qrcode" style="margin:20px 0;"></div>
-                        <p style="color:#666;">Refresh this page if the QR expires.</p>
+                        <h1 style="color:#128c7e; margin-bottom:10px;">Scan WhatsApp QR</h1>
+                        <p style="color:#333; margin-bottom:5px;">Instance ID: <b>${instanceId}</b></p>
+                        <p style="color:#666; margin-bottom:5px;">Source: <b>${source}</b></p>
+                        <p style="color:#888; margin-bottom:20px; font-size:0.9em;">Last updated: ${updatedAt}</p>
+                        <div id="qrcode" style="margin:20px 0; display:flex; justify-content:center;"></div>
+                        <p style="color:#888; font-size:0.9em; margin-top:20px;">This page will auto-refresh every 30s.</p>
+                        <button onclick="location.reload()" style="background:#128c7e; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; margin-top:10px;">Refresh Now</button>
                     </div>
                     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
                     <script>
@@ -97,6 +110,18 @@ app.get('/qr', authMiddleware, async (req, res) => {
                             width: 256,
                             height: 256
                         });
+                        
+                        // Smart reload: check for changes every 5s
+                        const currentQr = "${qr}";
+                        setInterval(async () => {
+                            try {
+                                const response = await fetch('/qr?format=json');
+                                const data = await response.json();
+                                if (data.qr !== currentQr) {
+                                    location.reload();
+                                }
+                            } catch (e) {}
+                        }, 5000);
                     </script>
                 </body>
             </html>

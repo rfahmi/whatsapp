@@ -44,6 +44,7 @@ let lastQr = null;
 let reconnectAttempts = 0;
 let cachedVersion = null;
 let versionCachedAt = 0;
+const instanceId = Math.random().toString(36).substring(7);
 
 const connectToWhatsApp = async () => {
     // Use a different session ID for local development to avoid conflicts with production
@@ -85,13 +86,14 @@ const connectToWhatsApp = async () => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
             lastQr = qr;
-            logger.info('>> New QR Code received. Please scan:');
+            logger.info({ instanceId }, '>> New QR Code received. Please scan:');
             
             // Store QR in Firestore for remote retrieval
             try {
                 await db.collection('whatsapp_sessions').doc(sessionId).set({ 
                     lastQr: qr,
-                    qrUpdatedAt: new Date()
+                    qrUpdatedAt: new Date(),
+                    instanceId: instanceId
                 }, { merge: true });
             } catch (err) {
                 logger.error({ err: err.message }, 'Failed to store QR in Firestore');
@@ -159,10 +161,12 @@ const sendMessage = async (jid, content) => {
         throw new Error('WhatsApp connection is not open. Message will be retried.');
     }
     const socket = await getSocket();
-    logger.info({ to: jid }, 'Sending message');
-
+    
     // If it's a simple string or an object with text, send it
     const text = typeof content === 'string' ? content : (content.text || content.message || '');
+    const snippet = text.replace(/\n/g, ' ').substring(0, 50) + (text.length > 50 ? '...' : '');
+    
+    logger.info({ to: jid, snippet }, 'Sending message');
 
     // Simulate human typing: composing presence → delay scaled to message length → send
     try {
@@ -189,4 +193,4 @@ const sendMessage = async (jid, content) => {
     return await socket.sendMessage(jid, { text });
 };
 
-module.exports = { connectToWhatsApp, getSocket, sendMessage, getQr, isReady };
+module.exports = { connectToWhatsApp, getSocket, sendMessage, getQr, isReady, instanceId };

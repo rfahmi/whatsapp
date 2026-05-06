@@ -184,7 +184,8 @@ const processQueue = async () => {
                 await doc.ref.update({ status: 'sent', sentAt: new Date() });
                 recordContactSend(data.to);
                 clearContactFailures(data.to);
-                logger.info({ messageId: doc.id }, 'Message sent successfully');
+                const snippet = (typeof data.message === 'string' ? data.message : (data.message?.text || data.message?.message || '')).replace(/\n/g, ' ').substring(0, 50);
+                logger.info({ messageId: doc.id, snippet }, 'Message sent successfully');
             } catch (error) {
                 logger.error({ messageId: doc.id, err: error.message }, 'Failed to send message');
                 recordContactFailure(data.to);
