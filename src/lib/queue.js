@@ -1,5 +1,5 @@
 const { db } = require('./firestore');
-const { sendMessage } = require('./whatsapp');
+const { sendMessage, isReady } = require('./whatsapp');
 const logger = require('./logger');
 
 // ─── Anti-Ban Configuration ───────────────────────────────────────────────────
@@ -96,6 +96,12 @@ const addMessageToQueue = async (to, message) => {
 
 const processQueue = async () => {
     if (isProcessing) return;
+    
+    // Skip if WhatsApp is not connected yet
+    if (!isReady()) {
+        return;
+    }
+
     isProcessing = true;
     try {
         const messagesRef = db.collection('messages');

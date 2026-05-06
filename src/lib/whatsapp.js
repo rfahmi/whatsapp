@@ -150,6 +150,8 @@ const getSocket = async () => {
     return sock;
 };
 
+const isReady = () => isConnected;
+
 const getQr = () => lastQr;
 
 const sendMessage = async (jid, content) => {
@@ -187,4 +189,4 @@ const sendMessage = async (jid, content) => {
     return await socket.sendMessage(jid, { text });
 };
 
-module.exports = { connectToWhatsApp, getSocket, sendMessage, getQr };
+module.exports = { connectToWhatsApp, getSocket, sendMessage, getQr, isReady };
